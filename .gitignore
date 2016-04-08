@@ -1,0 +1,46 @@
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+*.sh
+
+# temp files
+*.h~
+*.cpp~
+
+start
+
+*.sh~
+*.xml
+*.settings
+*.cfg
+*.depend
+.gitignore~
+*.msg
+Makefile.conf~
+.history
+output_matrix
