@@ -27,7 +27,7 @@ ASLController::ASLController(const std::string& name, const std::string& revisio
 	irFloorDistance = 0.5;
 	irFrontClearDistance = 0.8;
 	smoothingFactor = 1.0;
-	state = 0;
+	state = -1;
 	runNumber = 0;
 	currentBox = 0;
 	prevMotorLeft = 0;
@@ -47,7 +47,8 @@ ASLController::ASLController(const std::string& name, const std::string& revisio
 	
 	
 	// Action-Sequence-Learning Trigger NN
-	aslt = new ASLT;
+//	aslt = new ASLT;
+	asltf = new ASLTF;
 	
 	// RNN
 	for (int i=0; i<8; i++){
@@ -59,7 +60,7 @@ ASLController::ASLController(const std::string& name, const std::string& revisio
 	weights[0]=1.0;	weights[1]=1.0;	weights[2]=1.0;	weights[3]=0.1;	weights[4]=0.1;	weights[5]=0.05;	weights[6]=0.2;	weights[7]=0.1;
 
 	// lstm
-	lstmMode = 1;		// 1: sensor values as inputs, 2: trigger values as inputs
+	lstmMode = 2;		// 1: sensor values as inputs, 2: trigger values as inputs
 	if (lstmMode ==1) lstm.setup(11,10,8, 1.0); // inputs - hidden - outputs - bias
 	else lstm.setup(8,10,8, 1.0);
 
@@ -198,28 +199,30 @@ void ASLController::step(const sensor* sensors, int sensornumber,
 	if (!reset && (counter > 5) && (state < 8)) {
 		/*** either use calcTriggers+rnnStep or fsmStep to determine which action to execute ***/
 		// FSM to update state
-		fsmStep(motors);
+		
+//		fsmStep(motors);
+//		storeTriggerBalance();
 
 		
 		// Learned triggers + hand designed RNN
-//		calcTriggers();
+//		calcTriggersFull();
 //		rnnStep(motors);
-
 
 
 		// LSTM (motors, mode)
 		// mode == 1: sensor values as inputs
 		// mode == 2: trigger values as inputs
-//		if(lstmMode==2) calcTriggers();
+//		if(lstmMode==2) calcTriggersFull();
 //		lstmStep(motors,lstmMode);
 		
 		// learned triggers + trained ESN
-//		calcTriggers();
+//		calcTriggersFull();
 //		esnStep(motors);
-
+//		if (!haveTarget) setTarget(haveTarget);
+		
 		// learned triggers + dnf
-//		calcTriggers();
-//		dnfStep(motors);	
+		calcTriggersFull();
+		dnfStep(motors);	
 
 		// store state for plot
 //		storeState();
@@ -283,7 +286,7 @@ void ASLController::resetParameters(){
 	angleCurrentBox = 0.0;	
 	dropStuff = false;
 	dropBoxCounter = 0;
-	state = 0;
+	state = -1;
 	counter = 0;
 	
 	// RNN reset
@@ -299,122 +302,49 @@ void ASLController::resetParameters(){
 }
 
 /********************************************************************************************
-*** Calculate triggers with FF NN
+*** Calculate triggers with FF NN all in 1 architecture
 ********************************************************************************************/
-void ASLController::calcTriggers(){
+void ASLController::calcTriggersFull(){
 	// set inputs to the 8 Trigger NN
-	aslt->getASLT0()->setInput(  0 , prevMotorLeft);
-	aslt->getASLT0()->setInput(  1 , prevMotorRight);
-	aslt->getASLT0()->setInput(  2 , distanceCurrentBox);
-	aslt->getASLT0()->setInput(  3 , angleCurrentBox);
-	aslt->getASLT0()->setInput(  4 , irLeftLong);
-	aslt->getASLT0()->setInput(  5 , irRightLong);
-	aslt->getASLT0()->setInput(  6 , irLeftShort);
-	aslt->getASLT0()->setInput(  7 , irRightShort);
-	aslt->getASLT0()->setInput(  8 , irFront);
-	aslt->getASLT0()->setInput(  9 , touchGripper);
-	aslt->getASLT0()->setInput( 10 , (double)prevHaveTarget);
-	aslt->getASLT1()->setInput(  0 , prevMotorLeft);
-	aslt->getASLT1()->setInput(  1 , prevMotorRight);
-	aslt->getASLT1()->setInput(  2 , distanceCurrentBox);
-	aslt->getASLT1()->setInput(  3 , angleCurrentBox);
-	aslt->getASLT1()->setInput(  4 , irLeftLong);
-	aslt->getASLT1()->setInput(  5 , irRightLong);
-	aslt->getASLT1()->setInput(  6 , irLeftShort);
-	aslt->getASLT1()->setInput(  7 , irRightShort);
-	aslt->getASLT1()->setInput(  8 , irFront);
-	aslt->getASLT1()->setInput(  9 , touchGripper);
-	aslt->getASLT1()->setInput( 10 , (double)prevHaveTarget);
-	aslt->getASLT2()->setInput(  0 , prevMotorLeft);
-	aslt->getASLT2()->setInput(  1 , prevMotorRight);
-	aslt->getASLT2()->setInput(  2 , distanceCurrentBox);
-	aslt->getASLT2()->setInput(  3 , angleCurrentBox);
-	aslt->getASLT2()->setInput(  4 , irLeftLong);
-	aslt->getASLT2()->setInput(  5 , irRightLong);
-	aslt->getASLT2()->setInput(  6 , irLeftShort);
-	aslt->getASLT2()->setInput(  7 , irRightShort);
-	aslt->getASLT2()->setInput(  8 , irFront);
-	aslt->getASLT2()->setInput(  9 , touchGripper);
-	aslt->getASLT2()->setInput( 10 , (double)prevHaveTarget);
-	aslt->getASLT3()->setInput(  0 , prevMotorLeft);
-	aslt->getASLT3()->setInput(  1 , prevMotorRight);
-	aslt->getASLT3()->setInput(  2 , distanceCurrentBox);
-	aslt->getASLT3()->setInput(  3 , angleCurrentBox);
-	aslt->getASLT3()->setInput(  4 , irLeftLong);
-	aslt->getASLT3()->setInput(  5 , irRightLong);
-	aslt->getASLT3()->setInput(  6 , irLeftShort);
-	aslt->getASLT3()->setInput(  7 , irRightShort);
-	aslt->getASLT3()->setInput(  8 , irFront);
-	aslt->getASLT3()->setInput(  9 , touchGripper);
-	aslt->getASLT3()->setInput( 10 , (double)prevHaveTarget);
-	aslt->getASLT4()->setInput(  0 , prevMotorLeft);
-	aslt->getASLT4()->setInput(  1 , prevMotorRight);
-	aslt->getASLT4()->setInput(  2 , distanceCurrentBox);
-	aslt->getASLT4()->setInput(  3 , angleCurrentBox);
-	aslt->getASLT4()->setInput(  4 , irLeftLong);
-	aslt->getASLT4()->setInput(  5 , irRightLong);
-	aslt->getASLT4()->setInput(  6 , irLeftShort);
-	aslt->getASLT4()->setInput(  7 , irRightShort);
-	aslt->getASLT4()->setInput(  8 , irFront);
-	aslt->getASLT4()->setInput(  9 , touchGripper);
-	aslt->getASLT4()->setInput( 10 , (double)prevHaveTarget);
-	aslt->getASLT5()->setInput(  0 , prevMotorLeft);
-	aslt->getASLT5()->setInput(  1 , prevMotorRight);
-	aslt->getASLT5()->setInput(  2 , distanceCurrentBox);
-	aslt->getASLT5()->setInput(  3 , angleCurrentBox);
-	aslt->getASLT5()->setInput(  4 , irLeftLong);
-	aslt->getASLT5()->setInput(  5 , irRightLong);
-	aslt->getASLT5()->setInput(  6 , irLeftShort);
-	aslt->getASLT5()->setInput(  7 , irRightShort);
-	aslt->getASLT5()->setInput(  8 , irFront);
-	aslt->getASLT5()->setInput(  9 , touchGripper);
-	aslt->getASLT5()->setInput( 10 , (double)prevHaveTarget);
-	aslt->getASLT6()->setInput(  0 , prevMotorLeft);
-	aslt->getASLT6()->setInput(  1 , prevMotorRight);
-	aslt->getASLT6()->setInput(  2 , distanceCurrentBox);
-	aslt->getASLT6()->setInput(  3 , angleCurrentBox);
-	aslt->getASLT6()->setInput(  4 , irLeftLong);
-	aslt->getASLT6()->setInput(  5 , irRightLong);
-	aslt->getASLT6()->setInput(  6 , irLeftShort);
-	aslt->getASLT6()->setInput(  7 , irRightShort);
-	aslt->getASLT6()->setInput(  8 , irFront);
-	aslt->getASLT6()->setInput(  9 , touchGripper);
-	aslt->getASLT6()->setInput( 10 , (double)prevHaveTarget);
-	aslt->getASLT7()->setInput(  0 , prevMotorLeft);
-	aslt->getASLT7()->setInput(  1 , prevMotorRight);
-	aslt->getASLT7()->setInput(  2 , distanceCurrentBox);
-	aslt->getASLT7()->setInput(  3 , angleCurrentBox);
-	aslt->getASLT7()->setInput(  4 , irLeftLong);
-	aslt->getASLT7()->setInput(  5 , irRightLong);
-	aslt->getASLT7()->setInput(  6 , irLeftShort);
-	aslt->getASLT7()->setInput(  7 , irRightShort);
-	aslt->getASLT7()->setInput(  8 , irFront);
-	aslt->getASLT7()->setInput(  9 , touchGripper);
-	aslt->getASLT7()->setInput( 10 , (double)prevHaveTarget);				
+	asltf->setInput(  0 , prevMotorLeft);
+	asltf->setInput(  1 , prevMotorRight);
+	asltf->setInput(  2 , distanceCurrentBox);
+	asltf->setInput(  3 , angleCurrentBox);
+	asltf->setInput(  4 , irLeftLong);
+	asltf->setInput(  5 , irRightLong);
+	asltf->setInput(  6 , irLeftShort);
+	asltf->setInput(  7 , irRightShort);
+	asltf->setInput(  8 , irFront);
+	asltf->setInput(  9 , touchGripper);
+	asltf->setInput( 10 , (double)prevHaveTarget);	
 
 	// do FF step
-	aslt->allSteps();
+	asltf->step();
 	
 	// store outputs
-	double val0 = aslt->getASLT0()->getOutput(16);
-	double val1 = aslt->getASLT1()->getOutput(16);
-	double val2 = aslt->getASLT2()->getOutput(16);
-	double val3 = aslt->getASLT3()->getOutput(16);
-	double val4 = aslt->getASLT4()->getOutput(16);
-	double val5 = aslt->getASLT5()->getOutput(16);
-	double val6 = aslt->getASLT6()->getOutput(16);
-	double val7 = aslt->getASLT7()->getOutput(16);	
+	for (int i=0;i<8;i++) {
+		triggersUnfiltered[i] = asltf->getOutput(31+i);
+		//std::cout<<triggersUnfiltered[i]<<" ";
+	}
+//	std::cout<<std::endl;
 	
-	// triggersUnfiltered is a work in progress, testing stuff with LSTM training
-	triggersUnfiltered[0]=val0;	triggersUnfiltered[1]=val1;	triggersUnfiltered[2]=val2;	triggersUnfiltered[3]=val3;	
-	triggersUnfiltered[4]=val4;triggersUnfiltered[5]=val5;	triggersUnfiltered[6]=val6;	triggersUnfiltered[7]=val7;
+	
+
 	
 	// this is in essence a thresholding layer - will be added to the ASLT class later
-	for (int i=0; i<8; i++)	triggers[i] = 0;
-	if ((round(val0)>0) || (round(val1)>0) || (round(val2)>0) || (round(val3)>0) || (round(val4)>0) || (round(val5)>0) || (round(val6)>0) || (round(val7)>0)){
-		//cout<<std::setprecision(5)<<val0<<" "<<val1<<" "<<val2<<" "<<val3<<" "<<val4<<" "<<val5<<" "<<val6<<" "<<val7<<endl;
-		triggers[0]=val0;	triggers[1]=val1;	triggers[2]=val2;	triggers[3]=val3;	triggers[4]=val4;	triggers[5]=val5;	triggers[6]=val6;	triggers[7]=val7;
+	bool aboveThresh = false;
+	for (int i=0; i<8; i++)	{
+		triggers[i] = 0;
+		if ( round(triggersUnfiltered[i]) > 0 ) aboveThresh = true;
 	}
+	if (aboveThresh){
+		for (int i=0; i<8; i++)	if (round(triggersUnfiltered[i]) > 0)triggers[i] = round(triggersUnfiltered[i]);
+	}
+	
+//	for (int i=0;i<8;i++) std::cout<<triggers[i]<<" ";
+//	std::cout<<std::endl;
+	
+	
 }
 
 /********************************************************************************************
@@ -491,7 +421,7 @@ void ASLController::dnfStep(motor* motors){
 	dnf->setAmplitudes(inputs);
 	dnf->step();
 	state = dnfCalcState(dnf->getOutput());
-	if (state==7) state=0;
+//	if (state==7) state=0;
 	std::cout<<state<<std::endl;	
 }
 
@@ -534,6 +464,10 @@ void ASLController::fsmStep(motor* motors){
 	for (int i=0; i<8; i++)	triggers[i] = 0;
 
 	// determine new state based on previous state and sensor values (FSM)
+	if (state==-1) {
+		triggers[0] = 1.0;
+		state++;
+	} else
 	if (state==0) {
 		if (haveTarget)	{
 			state++;
@@ -599,7 +533,7 @@ void ASLController::executeAction(motor* motors){
 	} else if (state==7){
 		reset = true;
 		runNumber++;
-		state=8;
+		state=-1;
 	}
 }
 
@@ -842,52 +776,32 @@ void ASLController::store(){
 
 void ASLController::storeTriggerBalance(){
 	int p = 0; // positive sample
-	for (int i=0; i<7; i++) {
+	for (int i=0; i<8; i++) {
 		if (triggers[i] > 0) p = 1;
 	}
 
 	// Open Files
-	std::string in18name = "../data/T/" + std::to_string(p) + "/in18.txt";
+	std::string in18name = "../data/T/TEST/in11.txt";
 	in18.open (in18name.c_str(), ios::app);
 	in18.precision(5);
 	in18<<fixed;
 	
+	std::string in12name = "../data/T/TEST/outT.txt";
+	in12.open (in12name.c_str(), ios::app);
+	in12.precision(5);
+	in12<<fixed;
+
 	std::string in11name = "../data/T/" + std::to_string(p) + "/in11.txt";
 	in11.open (in11name.c_str(), ios::app);
 	in11.precision(5);
 	in11<<fixed;
 	
-	std::string in12name = "../data/T/" + std::to_string(p) + "/in12.txt";
-	in12.open (in12name.c_str(), ios::app);
-	in12.precision(5);
-	in12<<fixed;
+
 
 	std::string outTname = "../data/T/" + std::to_string(p) + "/outT.txt";	
 	outT.open (outTname.c_str(), ios::app);
 	outT.precision(5);
 	outT<<fixed;
-	
-	// add binary states to in18 and out7
-	for (int i=0;i<7;i++){
-		if (i == prevState)	in18<<"1";
-		else in18<<"0";
-		in18<<" ";		
-	}
-
-	// add scalar state to in12 and out1
-	double multiplier = 0.1;
-	in12<<prevState*multiplier<<" ";
-	
-	// add sensor values to all input files 
-	in18<<prevMotorLeft<<" "<<prevMotorRight;	
-	in18<<" ";
-	in18<<distanceCurrentBox<<" "<<angleCurrentBox;
-	in18<<" ";
-	in18<<irLeftLong<<" "<<irRightLong<<" "<<irLeftShort<<" "<<irRightShort<<" "<<irFront<<" "<<touchGripper;
-	in18<<" ";
-	if (prevHaveTarget) in18<<"1";
-	else in18<<"0";
-	in18<<"\n";
 
 	in11<<prevMotorLeft<<" "<<prevMotorRight;	
 	in11<<" ";
@@ -898,7 +812,18 @@ void ASLController::storeTriggerBalance(){
 	if (prevHaveTarget) in11<<"1";
 	else in11<<"0";
 	in11<<"\n";
-
+	
+	in18<<prevMotorLeft<<" "<<prevMotorRight;	
+	in18<<" ";
+	in18<<distanceCurrentBox<<" "<<angleCurrentBox;
+	in18<<" ";
+	in18<<irLeftLong<<" "<<irRightLong<<" "<<irLeftShort<<" "<<irRightShort<<" "<<irFront<<" "<<touchGripper;
+	in18<<" ";
+	if (prevHaveTarget) in18<<"1";
+	else in18<<"0";
+	in18<<"\n";
+	
+/*
 	in12<<prevMotorLeft<<" "<<prevMotorRight;	
 	in12<<" ";
 	in12<<distanceCurrentBox<<" "<<angleCurrentBox;
@@ -908,13 +833,17 @@ void ASLController::storeTriggerBalance(){
 	if (prevHaveTarget) in12<<"1";
 	else in12<<"0";
 	in12<<"\n";
-	
+*/	
 	
 	// add triggers to outT
-	for (int i=0; i<7; i++) {
+	for (int i=0; i<8; i++) {
 		outT<<triggers[i]<<" ";
+		in12<<triggers[i]<<" ";		
 	}
 	outT<<"\n";
+	in12<<"\n";
+
+
 
 	// close files	
   	in11.close();

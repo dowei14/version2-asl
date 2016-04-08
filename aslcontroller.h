@@ -10,7 +10,7 @@
 #include <cmath> //pow sqrt
 #include <vector>
 #include <fstream>
-#include "aslt.h" // FF Trigger Network
+#include "asltf.h" // FF Trigger Network full
 #include "lstm/lstm.h" // LSTM
 #include "esn/aslesn.h" // ESN
 #include "dnf/dnf.h" // DNF
@@ -65,8 +65,7 @@ class ASLController : public AbstractController {
 	double smoothingFactor;
 	
 	// trigger detection FF NN
-	ASLT* aslt;
-	
+	ASLTF* asltf; 
 	// RNN
 	float triggers[8];
 	float neurons[8];
@@ -152,7 +151,7 @@ class ASLController : public AbstractController {
 
 	// Controller Steps
 	virtual void resetParameters();
-	virtual void calcTriggers();
+	virtual void calcTriggersFull();	
 	virtual void fsmStep(motor* motors);
 	virtual void rnnStep(motor* motors);
 	virtual std::vector<float> createLstmSensorVector();
