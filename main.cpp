@@ -52,7 +52,7 @@ Primitives grippables;
 Primitives boxPrimitives;
 
 // number of runs before stopping
-int runs = 10;
+int runs = 1;
 
 
 class ThisSim : public Simulation {

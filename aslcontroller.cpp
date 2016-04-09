@@ -10,7 +10,16 @@
  * Dominik Steven Weickgenannt (dowei14@student.sdu.dk 2015/2016)
  */
  
- 
+/**************************************
+* defines the mode
+* 0 = FSM
+* 1 = Trigger + RNN
+* 2 = Trigger + LSTM
+* 3 = Trigger + ESN
+* 4 = Trigger + DNF
+* 5 = LSTM
+************************************/
+#define MODE 0
 
 ASLController::ASLController(const std::string& name, const std::string& revision)
 	: AbstractController(name, revision){
@@ -60,7 +69,8 @@ ASLController::ASLController(const std::string& name, const std::string& revisio
 	weights[0]=1.0;	weights[1]=1.0;	weights[2]=1.0;	weights[3]=0.1;	weights[4]=0.1;	weights[5]=0.05;	weights[6]=0.2;	weights[7]=0.1;
 
 	// lstm
-	lstmMode = 2;		// 1: sensor values as inputs, 2: trigger values as inputs
+	if (MODE ==2) lstmMode =2;
+	else lstmMode =1;
 	if (lstmMode ==1) lstm.setup(11,10,8, 1.0); // inputs - hidden - outputs - bias
 	else lstm.setup(8,10,8, 1.0);
 
@@ -192,37 +202,45 @@ void ASLController::step(const sensor* sensors, int sensornumber,
 	parameter.at(7) = angleCurrentBox;			
 
 	if (reset) resetParameters();	
+		
+
 	
 /********************************************************************************************
 *** run controller step
 ********************************************************************************************/	
 	if (!reset && (counter > 5) && (state < 8)) {
-		/*** either use calcTriggers+rnnStep or fsmStep to determine which action to execute ***/
+
 		// FSM to update state
-		
-//		fsmStep(motors);
-//		storeTriggerBalance();
-
-		
+		if (MODE == 0) fsmStep(motors);
 		// Learned triggers + hand designed RNN
-//		calcTriggersFull();
-//		rnnStep(motors);
-
-
+		if (MODE == 1) {
+			calcTriggersFull();
+			rnnStep(motors);
+		}
+		
 		// LSTM (motors, mode)
-		// mode == 1: sensor values as inputs
-		// mode == 2: trigger values as inputs
-//		if(lstmMode==2) calcTriggersFull();
-//		lstmStep(motors,lstmMode);
-		
+		if (MODE ==2){				
+			// mode == 1: sensor values as inputs
+			// mode == 2: trigger values as inputs
+			//if(lstmMode==2) calcTriggersFull();
+			calcTriggersFull();
+			lstmStep(motors,lstmMode);
+		}
 		// learned triggers + trained ESN
-//		calcTriggersFull();
-//		esnStep(motors);
-//		if (!haveTarget) setTarget(haveTarget);
-		
+		if (MODE == 3){
+			calcTriggersFull();
+			esnStep(motors);
+			if (!haveTarget) setTarget(haveTarget);
+		}
 		// learned triggers + dnf
-		calcTriggersFull();
-		dnfStep(motors);	
+		if (MODE == 4){
+			calcTriggersFull();
+			dnfStep(motors);
+		}
+
+		// LSTM without Trigger
+		if (MODE == 5) lstmStep(motors,lstmMode);		
+	
 
 		// store state for plot
 //		storeState();
@@ -267,8 +285,8 @@ void ASLController::step(const sensor* sensors, int sensornumber,
 
 	// store left and right motor values
 	motorLeft = motors[0]; motorRight = motors[1]; 	
-	
 
+	comparison();
 		
 };
 
@@ -542,7 +560,7 @@ void ASLController::executeAction(motor* motors){
 *****************************************************************************************/
 void ASLController::setTarget(bool& haveTarget){
 	// aint nobody got time for dat
-	if (counter < 4000){
+	if (counter < 1000){
 		std::random_device rd; // obtain a random number from hardware
 		std::mt19937 eng(rd()); // seed the generator
 		std::uniform_int_distribution<> distr(0, 2); // define the range
@@ -1420,3 +1438,34 @@ void ASLController::storeState(){
 	in11<<state<<"\n";
 	in11.close();
 }
+
+
+void ASLController::comparison(){
+	double xAbs = abs(vehicle->getPosition().x);
+	double yAbs = abs(vehicle->getPosition().y);
+	double z = vehicle->getPosition().z;		
+	if (xAbs > 12.0 || yAbs > 12.0) {
+		if (!reset) {
+			std::cout<<xAbs<<" success "<<yAbs<<std::endl;
+			std::string in11name = "../results/comparison.txt";
+			in11.open (in11name.c_str(), ios::app);
+			in11<<MODE<<" 1"<<"\n";
+			in11.close();
+		}
+		reset = true;
+	}
+	if (z < 1.0 or counter > 10000){
+		if (!reset) {
+			std::string in11name = "../results/comparison.txt";
+			in11.open (in11name.c_str(), ios::app);
+			in11<<MODE<<" 0"<<"\n";
+			in11.close();
+			std::cout<<z<<" failure "<<counter<<std::endl;
+		}
+		reset = true;
+	}
+/*
+
+*/	
+}
+

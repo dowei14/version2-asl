@@ -91,7 +91,7 @@ class ASLController : public AbstractController {
 	std::ofstream outT;
 	int sequenceCounter;
 	float triggersUnfiltered[8];
-	
+
 	// LSTM
 	LSTM lstm;
 	int lstmMode;
@@ -200,6 +200,7 @@ class ASLController : public AbstractController {
     virtual void storeRNN();    
     virtual void storeLSTMTrain();  
     virtual void storeState();
+    virtual void comparison();
 
   protected:
 
