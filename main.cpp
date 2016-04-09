@@ -54,7 +54,6 @@ Primitives boxPrimitives;
 // number of runs before stopping
 int runs = 1;
 
-
 class ThisSim : public Simulation {
 public:
 

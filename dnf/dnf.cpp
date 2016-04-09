@@ -1,6 +1,26 @@
 #include "dnf.h"
 #include <math.h>
 #include <iostream>
+#include <iomanip>
+
+std::vector<double> conv(std::vector<double> const &f, std::vector<double> const &g) {
+	int const nf = f.size();
+	int const ng = g.size();
+	int const n  = nf + ng - 1;
+	std::vector<double> out(n);
+	for(int i=0; i < n; ++i) {
+		int const jmn = (i >= ng - 1)? i - (ng - 1) : 0;
+		int const jmx = (i <  nf - 1)? i            : nf - 1;
+		for(int j=jmn; j <= jmx; ++j) {
+			out[i] += (f[j] * g[i - j]);
+		}
+	}
+	std::vector<double> returnVec;
+	for (int i=0;i<nf;i++){
+		returnVec.push_back(out[nf-1+i]);
+	}
+	return returnVec; 
+}
 
 DNF::DNF(){
 	stimSize = 0;
@@ -15,7 +35,7 @@ void DNF::setup(int _size, double _tau, double _h, double _beta){
 	h = _h;
 	beta = _beta;
 	for (int i=0;i<size;i++){
-		activation.push_back(0.0 + h);
+		activation.push_back( (0.0 + h) );
 		output.push_back(sigmoid(activation[i],beta));
 	}
 }
@@ -30,7 +50,7 @@ double DNF::gauss(int pos, int mu, double sigma){
 		if (pos == mu) return 1.0;
 		else return 0.0;
 	} else {
-		return exp(-0.5 * pow((pos-mu),2) / pow(sigma,2));
+		return exp(-0.5 * pow((pos-mu),2.0) / pow(sigma,2.0));
 	}
 }
 
@@ -63,35 +83,34 @@ std::vector<double> DNF::getSumStims(){
 
 void DNF::step(){
 	std::vector<double> stimVec = getSumStims();
-
-	// lateral step	
-	lateralInteraction.fullSum = 0.0;
-	for(std::vector<double>::iterator it = stimVec.begin(); it != stimVec.end(); ++it) lateralInteraction.fullSum += *it;
-
-	// convolution
-	int extendedSize = size + (size-lateralInteraction.kernelRangeRight + 1) + lateralInteraction.kernelRangeLeft;
-	std::vector<double> convOut;
-	for ( int i = 0; i < extendedSize; i++ ){
-		convOut.push_back(0.0);
-		for ( int j = 0; j < size; j++ ){
-			int index;
-			if (i-j >=0) index = i-j;
-			else index = size + i - j;
-		    convOut[i] += stimVec[index] * lateralInteraction.kernel[j];    // convolve: multiply and accumulate
-		}
-	}
+//for (unsigned int i=0; i<stimVec.size();i++) std::cout<<std::setprecision(4)<<std::fixed<<i<<": "<<stimVec[i]<<std::endl; std::cout<<std::endl<<std::endl;
 	
-	for ( int i = 0; i < size; i++ ) {
-		lateralInteraction.output[i] = convOut[lateralInteraction.kernelRangeRight+i] + lateralInteraction.amplitudeGlobal * lateralInteraction.fullSum;
-	}
-	
-	
-	// step
-	
+	// do DNF step()	
 	for (int i=0; i<size; i++){
-		activation[i] = activation[i] + 1.0 / tau * (- activation[i] + h + (stimVec[i] + lateralInteraction.output[i]));
+		activation[i] = activation[i] + (1.0 / tau * (- activation[i] + h + (stimVec[i]+lateralInteraction.output[i])));
 		output[i] = sigmoid(activation[i],beta);
 	} 	
+//for (unsigned int i=0; i<activation.size();i++) std::cout<<std::setprecision(4)<<std::fixed<<i<<": "<<activation[i]<<std::endl; std::cout<<std::endl<<std::endl;
+//for (unsigned int i=0; i<output.size();i++) std::cout<<std::setprecision(4)<<std::fixed<<i<<": "<<output[i]<<std::endl; std::cout<<std::endl<<std::endl;
+	
+	// lateral step	
+	lateralInteraction.fullSum = 0.0;
+	for(std::vector<double>::iterator it = output.begin(); it != output.end(); ++it) lateralInteraction.fullSum += *it;
+
+	// convolution
+	std::vector<double> convIn;
+	for ( int i = size - lateralInteraction.kernelRangeRight; i < size; i++ ) convIn.push_back(output[i]);
+	for ( int i = 0; i < size; i++ ) convIn.push_back(output[i]);
+	for ( int i = 0; i < lateralInteraction.kernelRangeLeft; i++ ) convIn.push_back(output[i]);	
+
+	std::vector<double> convOut = conv(lateralInteraction.kernel, convIn);
+	
+	for ( int i = 0; i < size; i++ ) {
+		lateralInteraction.output[i] = convOut[i] + lateralInteraction.amplitudeGlobal * lateralInteraction.fullSum;
+	}
+//for (unsigned int i=0; i<lateralInteraction.kernel.size();i++) std::cout<<std::setprecision(4)<<std::fixed<<i<<": "<<lateralInteraction.kernel[i]<<std::endl; std::cout<<std::endl<<std::endl;	
+//for (unsigned int i=0; i<convOut.size();i++) std::cout<<std::setprecision(4)<<std::fixed<<i<<": "<<convOut[i]<<std::endl; std::cout<<std::endl<<std::endl;
+
 }
 
 void DNF::setupLateral(double _sigmaExc, double _amplitudeExc, double _sigmaInh, double _amplitudeInh, double _amplitudeGlobal, double _cutoffFactor){
@@ -153,13 +172,6 @@ void DNF::setupLateral(double _sigmaExc, double _amplitudeExc, double _sigmaInh,
 	for (unsigned int i=0;i<gaussNormExc.size();i++){
 		lateralInteraction.kernel.push_back(lateralInteraction.amplitudeExc * gaussNormExc[i] - lateralInteraction.amplitudeInh * gaussNormInh[i]);
 	}
-	
-	//std::cout<<kernelRange<<" "<<kernelRangeLeft<<" "<<kernelRangeRight<<std::endl;
-/*	TODO:
-    % initialization
-    function obj = init(obj)
-        obj.extIndex = [obj.size(2) - obj.kernelRangeRight + 1 : obj.size(2), 1 : obj.size(2), 1 : obj.kernelRangeLeft];      
-    end
-*/
+
 }
 
