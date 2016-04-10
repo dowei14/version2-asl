@@ -164,6 +164,9 @@ public:
 		//4) - set gravity if not set then it uses -9.81 =earth gravity
 		//global.odeConfig.setParam("gravity", -9.81);
 
+		// set realtimefactor to speed up simulation
+		global.odeConfig.realTimeFactor = 10.0;
+
 		/**************************************************************************************************
 		***			Set up Environment
 		**************************************************************************************************/

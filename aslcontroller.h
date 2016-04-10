@@ -200,6 +200,7 @@ class ASLController : public AbstractController {
     virtual void storeRNN();    
     virtual void storeLSTMTrain();  
     virtual void storeState();
+    bool alreadyDone;
     virtual void comparison();
 
   protected:

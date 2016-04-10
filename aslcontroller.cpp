@@ -19,7 +19,7 @@
 * 4 = Trigger + DNF
 * 5 = LSTM
 ************************************/
-#define MODE 4
+#define MODE 2
 
 ASLController::ASLController(const std::string& name, const std::string& revision)
 	: AbstractController(name, revision){
@@ -42,6 +42,7 @@ ASLController::ASLController(const std::string& name, const std::string& revisio
 	prevMotorLeft = 0;
 	prevMotorRight = 0;
 	sequenceCounter = 0;
+	alreadyDone = false;	
 
 	// things for plotting
 	parameter.resize(8);
@@ -105,6 +106,7 @@ ASLController::ASLController(const std::string& name, const std::string& revisio
 		dnf->addStim((i+1)*10-1,sigma_input);
 	}
 	
+
 
 }
 
@@ -214,31 +216,32 @@ void ASLController::step(const sensor* sensors, int sensornumber,
 
 		// FSM to update state
 		if (MODE == 0) fsmStep(motors);
+		
 		// Learned triggers + hand designed RNN
-		if (MODE == 1) {
+		else if (MODE == 1) {
 			calcTriggersFull();
 			rnnStep(motors);
 		}
 		
 		// LSTM (motors, mode)
-		if (MODE ==2){				
+		else if (MODE ==2){				
 			calcTriggersFull();
 			lstmStep(motors,lstmMode);
 		}
 		// learned triggers + trained ESN
-		if (MODE == 3){
+		else if (MODE == 3){
 			calcTriggersFull();
 			esnStep(motors);
 			if (!haveTarget) setTarget(haveTarget);
 		}
 		// learned triggers + dnf
-		if (MODE == 4){
+		else if (MODE == 4){
 			calcTriggersFull();
 			dnfStep(motors);
 		}
 
 		// LSTM without Trigger
-		if (MODE == 5) lstmStep(motors,lstmMode);		
+		else if (MODE == 5) lstmStep(motors,lstmMode);		
 	
 
 		// store state for plot
@@ -548,9 +551,9 @@ void ASLController::executeAction(motor* motors){
 	} else if (state==6){
 		crossGap(motors);
 	} else if (state==7){
-		reset = true;
-		runNumber++;
-		state=-1;
+		//reset = true;
+		//runNumber++;
+		//state=-1;
 	}
 }
 
@@ -1442,29 +1445,35 @@ void ASLController::storeState(){
 void ASLController::comparison(){
 	double xAbs = abs(vehicle->getPosition().x);
 	double yAbs = abs(vehicle->getPosition().y);
-	double z = vehicle->getPosition().z;		
+	double z = vehicle->getPosition().z;
+	if (reset && !alreadyDone){
+		std::string in11name = "../results/comparison.txt";
+		in11.open (in11name.c_str(), ios::app);
+		in11<<MODE<<" 0"<<"\n";
+		in11.close();
+		std::cout<<z<<" failure "<<counter<<std::endl;
+	}		
 	if (xAbs > 12.0 || yAbs > 12.0) {
-		if (!reset) {
+		if (!alreadyDone) {
 			std::cout<<xAbs<<" success "<<yAbs<<std::endl;
 			std::string in11name = "../results/comparison.txt";
 			in11.open (in11name.c_str(), ios::app);
 			in11<<MODE<<" 1"<<"\n";
 			in11.close();
 		}
-		reset = true;
+		reset = true;		
+		alreadyDone = true;
 	}
-	if (z < 1.0 or counter > 10000){
-		if (!reset) {
+	if (z < 1.0 or counter > 20000){
+		if (!alreadyDone) {
 			std::string in11name = "../results/comparison.txt";
 			in11.open (in11name.c_str(), ios::app);
 			in11<<MODE<<" 0"<<"\n";
 			in11.close();
 			std::cout<<z<<" failure "<<counter<<std::endl;
 		}
-		reset = true;
+		reset = true;			
+		alreadyDone = true;
 	}
-/*
-
-*/	
 }
 
